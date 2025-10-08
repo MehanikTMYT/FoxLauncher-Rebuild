@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace MineLauncher.Shared.Models
+namespace FoxLauncher.Modules.ProfileModule.Models
 {
     public class Version
     {

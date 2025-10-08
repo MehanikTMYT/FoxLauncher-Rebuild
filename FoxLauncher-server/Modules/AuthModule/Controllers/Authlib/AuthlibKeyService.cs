@@ -2,16 +2,16 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace AuthServer.Services.Authlib
+namespace FoxLauncher.Modules.AuthModule.Services 
 {
-    public interface IAuthlibKeyService
+    public interface IAuthlibKeyService 
     {
         string GetPublicKeyPem();
         byte[] GetPrivateKey();
         string SignData(byte[] data);
     }
 
-    public class AuthlibKeyService : IAuthlibKeyService
+    public class AuthlibKeyService : IAuthlibKeyService 
     {
         private readonly ILogger<AuthlibKeyService> _logger;
         private readonly string _publicKeyPath;
@@ -21,7 +21,7 @@ namespace AuthServer.Services.Authlib
         public AuthlibKeyService(ILogger<AuthlibKeyService> logger, IWebHostEnvironment environment)
         {
             _logger = logger;
-            // Поместим ключи в wwwroot или в директорию данных приложения
+            
             var dataDir = Path.Combine(environment.ContentRootPath, "data", "authlib");
             Directory.CreateDirectory(dataDir);
             _publicKeyPath = Path.Combine(dataDir, "public.pem");

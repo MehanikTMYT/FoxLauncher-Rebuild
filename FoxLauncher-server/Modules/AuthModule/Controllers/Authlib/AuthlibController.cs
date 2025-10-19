@@ -1,20 +1,20 @@
-﻿using FoxLauncher.Modules.AuthModule.Data; 
+﻿using FoxLauncher.Modules.AuthModule.Data;
 using FoxLauncher.Modules.AuthModule.Models;
-using FoxLauncher.Modules.AuthModule.Services; 
+using FoxLauncher.Modules.AuthModule.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore; 
 using System.Text;
 using System.Text.Json;
 
-namespace FoxLauncher.Modules.AuthModule.Controllers 
+namespace FoxLauncher.Modules.AuthModule.Controllers
 {
     [ApiController]
     [Route("authlib")] // Базовый путь для authlib
     public class AuthlibController : ControllerBase
     {
-        private readonly AuthDbContext _context; 
-        private readonly IAuthlibKeyService _keyService; 
-        private readonly ITextureService _textureService; 
+        private readonly AuthDbContext _context;
+        private readonly IAuthlibKeyService _keyService;
+        private readonly ITextureService _textureService;
 
         public AuthlibController(AuthDbContext context, IAuthlibKeyService keyService, ITextureService textureService)
         {
@@ -32,26 +32,26 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                 meta = new
                 {
                     serverName = "FoxLauncher Authlib", // Имя вашего сервера
-                    implementationName = "fox-launcher-authserver", 
-                    implementationVersion = "1.0.0", 
+                    implementationName = "fox-launcher-authserver",
+                    implementationVersion = "1.0.0",
                 },
                 skinDomains = new[] { Request.Host.Host }, // Домен, с которого разрешены скины (ваш сервер)
-                signaturePublickey = _keyService.GetPublicKeyPem().Replace("\n", "").Replace("\r", "") 
+                signaturePublickey = _keyService.GetPublicKeyPem().Replace("\n", "").Replace("\r", "")
             };
             // Используем indexer для установки заголовка
             Response.Headers["X-Authlib-Injector-API-Location"] = $"{Request.Scheme}://{Request.Host}/authlib";
             return Ok(response);
         }
 
-        // GET /sessionserver/session/minecraft/profile/{uuid}
-        [HttpGet("session/minecraft/profile/{uuid}")] 
-        public async Task<IActionResult> GetProfile(string uuid) 
+        // GET /sessionserver/session/minecraft/profile/{UUID}
+        [HttpGet("session/minecraft/profile/{UUID}")]
+        public async Task<IActionResult> GetProfile(string UUID) // UUID теперь ожидается как UUID
         {
-            // Ищем пользователя по его UUID
-            var user = await _context.Users 
-                .Include(u => u.CurrentSkin) 
+            // Ищем пользователя по его UUID (исправлено с UUID на UUID)
+            var user = await _context.Users
+                .Include(u => u.CurrentSkin)
                 .Include(u => u.CurrentCape)
-                .FirstOrDefaultAsync(u => u.UUID == uuid); 
+                .FirstOrDefaultAsync(u => u.UUID == UUID); 
 
             if (user == null)
             {
@@ -65,7 +65,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
             {
                 id = user.UUID, 
                 name = user.Username,
-                properties = new List<object>() 
+                properties = new List<object>()
             };
 
             if (!string.IsNullOrEmpty(texturesResult?.SkinUrl) || !string.IsNullOrEmpty(texturesResult?.CapeUrl))
@@ -75,7 +75,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                     timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     profileId = user.UUID,
                     profileName = user.Username,
-                    isPublic = true, 
+                    isPublic = true,
                     textures = new Dictionary<string, object>()
                 };
 
@@ -115,7 +115,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                 return BadRequest();
             }
 
-            // Найти пользователя по имени
+            // Найти пользователя по имени (для клиента, который может не знать UUID)
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
             if (user == null)
             {
@@ -127,13 +127,13 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
             if (string.IsNullOrEmpty(serverId))
             {
                 // Получить текстуры через TextureService
-                var texturesResult = await _textureService.GetUserTexturesAsync(user.UUID);
+                var texturesResult = await _textureService.GetUserTexturesAsync(user.UUID); // Использование правильного свойства UUID
 
                 var profileResponse = new
                 {
-                    id = user.UUID, 
+                    id = user.UUID, // Использование правильного свойства UUID для ответа клиента
                     name = user.Username,
-                    properties = new List<object>() 
+                    properties = new List<object>()
                 };
 
                 if (!string.IsNullOrEmpty(texturesResult?.SkinUrl) || !string.IsNullOrEmpty(texturesResult?.CapeUrl))
@@ -141,9 +141,9 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                     var textures = new
                     {
                         timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        profileId = user.UUID,
+                        profileId = user.UUID, // Использование правильного свойства UUID
                         profileName = user.Username,
-                        isPublic = true, 
+                        isPublic = true,
                         textures = new Dictionary<string, object>()
                     };
 
@@ -180,19 +180,17 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                 // В реальности serverId формируется как хеш SHA1(Minecraft+SharedSecret+ServerId)
                 // Сервер игры проверяет подпись, используя наш публичный ключ
                 // Для этого нужно сформировать строку "serverId + UUID" и подписать её
-                var verificationString = serverId + user.UUID;
+                var verificationString = serverId + user.UUID; // Использование правильного свойства UUID
                 var signature = _keyService.SignData(Encoding.UTF8.GetBytes(verificationString));
 
-                // Возвращаем пустой ответ 204 No Content, если подпись успешна
-                // На практике, сервер игры вызывает hasJoined и проверяет ответ или отсутствие ошибки
-                // Возвращение профиля с подписью serverId - это стандарт authlib-injector
-                var texturesResult = await _textureService.GetUserTexturesAsync(user.UUID);
+                // Возвращаем профиль с подписью serverId - это стандарт authlib-injector
+                var texturesResult = await _textureService.GetUserTexturesAsync(user.UUID); // Использование правильного свойства UUID
 
                 var profileResponse = new
                 {
-                    id = user.UUID, 
+                    id = user.UUID, // Использование правильного свойства UUID для ответа сервера
                     name = user.Username,
-                    properties = new List<object>() 
+                    properties = new List<object>()
                 };
 
                 if (!string.IsNullOrEmpty(texturesResult?.SkinUrl) || !string.IsNullOrEmpty(texturesResult?.CapeUrl))
@@ -200,9 +198,9 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                     var textures = new
                     {
                         timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        profileId = user.UUID,
+                        profileId = user.UUID, // Использование правильного свойства UUID
                         profileName = user.Username,
-                        isPublic = true, 
+                        isPublic = true,
                         textures = new Dictionary<string, object>()
                     };
 
@@ -218,7 +216,6 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                     var texturesJson = JsonSerializer.Serialize(textures);
                     var texturesValue = Convert.ToBase64String(Encoding.UTF8.GetBytes(texturesJson));
 
-                   
                     profileResponse.properties.Add(new
                     {
                         name = "textures",
@@ -227,7 +224,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                     });
                 }
 
-                return Ok(profileResponse); 
+                return Ok(profileResponse);
             }
         }
 
@@ -249,8 +246,8 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
             }
 
             // Проверка JWT токена (предполагается, что JWT уже проверен через Authentication/Authorization атрибуты или кастомную логику)
-            // Получаем UUID пользователя из Claims (предполагается, что JWT содержит claim "user_uuid")
-            var userIdClaim = User.FindFirst("user_uuid"); // Используем кастомный claim для UUID
+            // Получаем UUID пользователя из Claims (предполагается, что JWT содержит claim "user_UUID")
+            var userIdClaim = User.FindFirst("user_UUID"); // Используем кастомный claim для UUID
             if (userIdClaim == null)
             {
                 // Логика для анонимного доступа или ошибка

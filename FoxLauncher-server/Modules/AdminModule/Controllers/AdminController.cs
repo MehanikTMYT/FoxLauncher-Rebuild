@@ -153,7 +153,7 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
 
         // GET /api/admin/versions
         [HttpGet("versions")]
-        public async Task<ActionResult<IEnumerable<ProfileModule.Models.Version>>> GetVersions()
+        public async Task<ActionResult<IEnumerable<Version>>> GetVersions()
         {
             if (!IsAdmin())
             {
@@ -168,7 +168,7 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
 
         // GET /api/admin/versions/{id}
         [HttpGet("versions/{id}")]
-        public async Task<ActionResult<ProfileModule.Models.Version>> GetVersion(int id)
+        public async Task<ActionResult<Version>> GetVersion(int id)
         {
             if (!IsAdmin())
             {

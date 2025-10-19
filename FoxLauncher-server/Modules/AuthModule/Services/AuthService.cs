@@ -1,12 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using FoxLauncher.Modules.AuthModule.Data;
 using FoxLauncher.Modules.AuthModule.Models;
-using System.Text.Json; 
 
 namespace FoxLauncher.Modules.AuthModule.Services
 {
@@ -14,8 +9,8 @@ namespace FoxLauncher.Modules.AuthModule.Services
     {
         private readonly UserManager<User> _userManager;
         private readonly SignInManager<User> _signInManager;
-        private readonly AuthDbContext _context; 
-        private readonly IConfiguration _configuration;
+        private readonly AuthDbContext _context; // Возможно, больше не нужен в этом сервисе, если все операции через UserManager
+        private readonly IConfiguration _configuration; // Возможно, больше не нужен в этом сервисе, если генерация токена вынесена
 
         public AuthService(UserManager<User> userManager, SignInManager<User> signInManager, AuthDbContext context, IConfiguration configuration)
         {
@@ -41,64 +36,11 @@ namespace FoxLauncher.Modules.AuthModule.Services
             var result = await _userManager.CreateAsync(user, password);
             if (result.Succeeded)
             {
-                // Генерация токена подтверждения email, если нужно сразу
-                await GenerateEmailConfirmationTokenAsync(user.Id.ToString());
+                // Логика отправки письма подтверждения теперь будет в контроллере или отдельном сервисе
+                // await GenerateEmailConfirmationTokenAsync(user.Id.ToString()); // Удалено из сервиса
             }
             return result.Succeeded;
         }
 
-        public async Task<string> GenerateJwtTokenAsync(User user)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key is not configured"));
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                    new Claim(ClaimTypes.Name, user.UserName ?? string.Empty),
-                    // Добавим UUID как claim
-                    new Claim("user_uuid", user.Uuid),
-                    // Добавьте другие claims, например, роли
-                    // new Claim("uuid", user.Uuid), // Если UUID хранится
-                }),
-                Expires = DateTime.UtcNow.AddDays(7), // Пример срока действия
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-            };
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
-        }
-
-        public async Task<bool> ConfirmEmailAsync(string userId, string token)
-        {
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user != null)
-            {
-                var result = await _userManager.ConfirmEmailAsync(user, token);
-                if (result.Succeeded)
-                {
-                    user.EmailConfirmed = true;
-                    await _userManager.UpdateAsync(user);
-                }
-                return result.Succeeded;
-            }
-            return false;
-        }
-
-        public async Task<bool> GenerateEmailConfirmationTokenAsync(string userId)
-        {
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user != null)
-            {
-                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                user.EmailConfirmationToken = token;
-                user.EmailTokenExpiry = DateTime.UtcNow.AddHours(24); // Устанавливаем срок действия токена
-                var result = await _userManager.UpdateAsync(user);
-                return result.Succeeded;
-            }
-            return false;
-        }
-
-        // Другие методы...
     }
 }

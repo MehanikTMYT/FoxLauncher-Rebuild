@@ -1,6 +1,6 @@
 -- 1. СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ
-DROP USER IF EXISTS 'MineDBUser'@'%';
-CREATE USER 'MineDBUser'@'%' IDENTIFIED BY 'vdsTest!';
+DROP USER IF EXISTS 'FoxLauncherUser'@'%';
+CREATE USER 'FoxLauncherUser'@'%' IDENTIFIED BY 'vdsTest!';
 
 -- --------------------------------------------------------------------
 
@@ -170,7 +170,7 @@ CREATE TABLE download_logs (
 -- --------------------------------------------------------------------
 
 -- 5. ПРЕДОСТАВЛЕНИЕ ПРАВ ПОЛЬЗОВАТЕЛЮ
--- Предоставляем пользователю MineDBUser минимально необходимые права для работы приложения.
+-- Предоставляем пользователю FoxLauncherUser минимально необходимые права для работы приложения.
 -- Эти права позволяют:
 -- - Выполнять SELECT, INSERT, UPDATE, DELETE (DML) на все таблицы в указанных БД.
 -- - Выполнять ALTER, CREATE, DROP (DDL) на таблицы (для миграций/обновлений схемы).
@@ -180,13 +180,13 @@ CREATE TABLE download_logs (
 -- - INDEX (для создания индексов).
 
 -- Права для launcher_auth_db
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON launcher_auth_db.* TO 'MineDBUser'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON launcher_auth_db.* TO 'FoxLauncherUser'@'%';
 
 -- Права для launcher_admin_db
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON launcher_admin_db.* TO 'MineDBUser'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON launcher_admin_db.* TO 'FoxLauncherUser'@'%';
 
 -- Права для launcher_file_db
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON launcher_file_db.* TO 'MineDBUser'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON launcher_file_db.* TO 'FoxLauncherUser'@'%';
 
 -- Обязательно применяем изменения
 FLUSH PRIVILEGES;

@@ -2,16 +2,16 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace FoxLauncher.Modules.AuthModule.Services 
+namespace FoxLauncher.Modules.AuthModule.Services.Authlib
 {
-    public interface IAuthlibKeyService 
+    public interface IAuthlibKeyService
     {
         string GetPublicKeyPem();
         byte[] GetPrivateKey();
         string SignData(byte[] data);
     }
 
-    public class AuthlibKeyService : IAuthlibKeyService 
+    public class AuthlibKeyService : IAuthlibKeyService
     {
         private readonly ILogger<AuthlibKeyService> _logger;
         private readonly string _publicKeyPath;
@@ -21,7 +21,7 @@ namespace FoxLauncher.Modules.AuthModule.Services
         public AuthlibKeyService(ILogger<AuthlibKeyService> logger, IWebHostEnvironment environment)
         {
             _logger = logger;
-            
+
             var dataDir = Path.Combine(environment.ContentRootPath, "data", "authlib");
             Directory.CreateDirectory(dataDir);
             _publicKeyPath = Path.Combine(dataDir, "public.pem");
@@ -32,47 +32,81 @@ namespace FoxLauncher.Modules.AuthModule.Services
 
         private void LoadOrCreateKeys()
         {
-            if (File.Exists(_publicKeyPath) && File.Exists(_privateKeyPath))
+            try
             {
-                _logger.LogInformation("Loading existing Authlib keys.");
-                var privateKeyBytes = File.ReadAllBytes(_privateKeyPath);
-                _rsa = RSA.Create();
-                _rsa.ImportRSAPrivateKey(privateKeyBytes, out _);
+                if (File.Exists(_publicKeyPath) && File.Exists(_privateKeyPath))
+                {
+                    _logger.LogInformation("Loading existing Authlib keys.");
+                    var privateKeyBytes = File.ReadAllBytes(_privateKeyPath);
+                    _rsa = RSA.Create();
+                    _rsa.ImportRSAPrivateKey(privateKeyBytes, out _);
+                    _logger.LogDebug("Successfully loaded existing keys.");
+                }
+                else
+                {
+                    _logger.LogInformation("Generating new Authlib keys.");
+                    _rsa = RSA.Create(2048); // Рекомендуемый размер
+
+                    var privateKeyBytes = _rsa.ExportRSAPrivateKey();
+                    var publicKeyBytes = _rsa.ExportRSAPublicKey();
+
+                    File.WriteAllBytes(_privateKeyPath, privateKeyBytes);
+                    File.WriteAllBytes(_publicKeyPath, publicKeyBytes);
+
+                    _logger.LogInformation("New Authlib keys generated and saved.");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                _logger.LogInformation("Generating new Authlib keys.");
-                _rsa = RSA.Create(2048); // Рекомендуемый размер
-
-                var privateKeyBytes = _rsa.ExportRSAPrivateKey();
-                var publicKeyBytes = _rsa.ExportRSAPublicKey();
-
-                File.WriteAllBytes(_privateKeyPath, privateKeyBytes);
-                File.WriteAllBytes(_publicKeyPath, publicKeyBytes);
-
-                _logger.LogInformation("New Authlib keys generated and saved.");
+                _logger.LogError(ex, "Failed to load or create Authlib keys.");
+                throw; // Пробрасываем исключение, чтобы приложение не стартовало с неработающей криптографией
             }
         }
 
         public string GetPublicKeyPem()
         {
-            if (_rsa == null) throw new InvalidOperationException("RSA keys not loaded.");
-            var publicKeyBytes = _rsa.ExportRSAPublicKey();
-            var base64Key = Convert.ToBase64String(publicKeyBytes);
-            return $"-----BEGIN PUBLIC KEY-----\n{FormatPemString(base64Key)}\n-----END PUBLIC KEY-----";
+            try
+            {
+                if (_rsa == null) throw new InvalidOperationException("RSA keys not loaded.");
+                var publicKeyBytes = _rsa.ExportRSAPublicKey();
+                var base64Key = Convert.ToBase64String(publicKeyBytes);
+                return $"-----BEGIN PUBLIC KEY-----\n{FormatPemString(base64Key)}\n-----END PUBLIC KEY-----";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to export public key PEM.");
+                throw; // Пробрасываем исключение, так как это критическая ошибка для authlib
+            }
         }
 
         public byte[] GetPrivateKey()
         {
-            if (_rsa == null) throw new InvalidOperationException("RSA keys not loaded.");
-            return _rsa.ExportRSAPrivateKey();
+            try
+            {
+                if (_rsa == null) throw new InvalidOperationException("RSA keys not loaded.");
+                return _rsa.ExportRSAPrivateKey();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to export private key.");
+                throw; // Пробрасываем исключение, так как это критическая ошибка для authlib
+            }
         }
 
         public string SignData(byte[] data)
         {
-            if (_rsa == null) throw new InvalidOperationException("RSA keys not loaded.");
-            var signature = _rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            return Convert.ToBase64String(signature);
+            try
+            {
+                if (_rsa == null) throw new InvalidOperationException("RSA keys not loaded.");
+                if (data == null || data.Length == 0) throw new ArgumentException("Data to sign cannot be null or empty.", nameof(data));
+                var signature = _rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                return Convert.ToBase64String(signature);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to sign data.");
+                throw; // Пробрасываем исключение, так как это критическая ошибка для authlib
+            }
         }
 
         private string FormatPemString(string base64String)

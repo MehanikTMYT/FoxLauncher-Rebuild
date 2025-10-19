@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FoxLauncher.Modules.CabinetModule.Models
 {
@@ -26,7 +27,7 @@ namespace FoxLauncher.Modules.CabinetModule.Models
 
         public bool IsActive { get; set; } = false;
 
+        [ForeignKey("UserId")]
         public virtual User User { get; set; } = null!;
-        public virtual ICollection<User>? UsersWithThisCapeAsCurrent { get; set; }
     }
 }

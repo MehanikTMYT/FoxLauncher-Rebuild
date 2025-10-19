@@ -51,7 +51,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
             var user = await _context.Users 
                 .Include(u => u.CurrentSkin) 
                 .Include(u => u.CurrentCape)
-                .FirstOrDefaultAsync(u => u.Uuid == uuid); 
+                .FirstOrDefaultAsync(u => u.UUID == uuid); 
 
             if (user == null)
             {
@@ -59,11 +59,11 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
             }
 
             // Получить текстуры через TextureService
-            var texturesResult = await _textureService.GetUserTexturesAsync(user.Uuid);
+            var texturesResult = await _textureService.GetUserTexturesAsync(user.UUID);
 
             var profileResponse = new
             {
-                id = user.Uuid, 
+                id = user.UUID, 
                 name = user.Username,
                 properties = new List<object>() 
             };
@@ -73,7 +73,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                 var textures = new
                 {
                     timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    profileId = user.Uuid,
+                    profileId = user.UUID,
                     profileName = user.Username,
                     isPublic = true, 
                     textures = new Dictionary<string, object>()
@@ -127,11 +127,11 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
             if (string.IsNullOrEmpty(serverId))
             {
                 // Получить текстуры через TextureService
-                var texturesResult = await _textureService.GetUserTexturesAsync(user.Uuid);
+                var texturesResult = await _textureService.GetUserTexturesAsync(user.UUID);
 
                 var profileResponse = new
                 {
-                    id = user.Uuid, 
+                    id = user.UUID, 
                     name = user.Username,
                     properties = new List<object>() 
                 };
@@ -141,7 +141,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                     var textures = new
                     {
                         timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        profileId = user.Uuid,
+                        profileId = user.UUID,
                         profileName = user.Username,
                         isPublic = true, 
                         textures = new Dictionary<string, object>()
@@ -180,17 +180,17 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                 // В реальности serverId формируется как хеш SHA1(Minecraft+SharedSecret+ServerId)
                 // Сервер игры проверяет подпись, используя наш публичный ключ
                 // Для этого нужно сформировать строку "serverId + UUID" и подписать её
-                var verificationString = serverId + user.Uuid;
+                var verificationString = serverId + user.UUID;
                 var signature = _keyService.SignData(Encoding.UTF8.GetBytes(verificationString));
 
                 // Возвращаем пустой ответ 204 No Content, если подпись успешна
                 // На практике, сервер игры вызывает hasJoined и проверяет ответ или отсутствие ошибки
                 // Возвращение профиля с подписью serverId - это стандарт authlib-injector
-                var texturesResult = await _textureService.GetUserTexturesAsync(user.Uuid);
+                var texturesResult = await _textureService.GetUserTexturesAsync(user.UUID);
 
                 var profileResponse = new
                 {
-                    id = user.Uuid, 
+                    id = user.UUID, 
                     name = user.Username,
                     properties = new List<object>() 
                 };
@@ -200,7 +200,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
                     var textures = new
                     {
                         timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        profileId = user.Uuid,
+                        profileId = user.UUID,
                         profileName = user.Username,
                         isPublic = true, 
                         textures = new Dictionary<string, object>()

@@ -11,6 +11,7 @@ namespace FoxLauncher.Modules.ProfileModule.Models
         public string Name { get; set; } = string.Empty;
 
         public string? Description { get; set; }
+        public string? IconPath { get; set; }
 
         public int? DefaultVersionId { get; set; }
 

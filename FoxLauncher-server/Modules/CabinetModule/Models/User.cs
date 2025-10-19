@@ -19,6 +19,9 @@ namespace FoxLauncher.Modules.CabinetModule.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? LastLogin { get; set; }
+        
+        [MaxLength(36)]
+        public string UUID { get; set; } = string.Empty;
 
         public int? CurrentSkinId { get; set; }
         public int? CurrentCapeId { get; set; }

@@ -2,9 +2,12 @@
 using FoxLauncher.Modules.AuthModule.Data;
 using FoxLauncher.Modules.AuthModule.Models;
 using FoxLauncher.Modules.AuthModule.Services;
+using FoxLauncher.Modules.FileModule.Data;
+using FoxLauncher.Modules.FileModule.Services;
+using FoxLauncher.Modules.ProfileModule.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Text;
 
 internal class Program
@@ -21,6 +24,14 @@ internal class Program
             options.UseMySql(builder.Configuration.GetConnectionString("AuthDbConnection"), // Убедитесь, что строка подключения указана
                              ServerVersion.Parse("8.0.30-mysql"))); // Укажите свою версию MySQL
 
+        builder.Services.AddDbContext<ProfileDbContext>(options =>
+            options.UseMySql(builder.Configuration.GetConnectionString("AdminDbConnection"), // Убедитесь, что строка подключения указана
+                     ServerVersion.Parse("8.0.30-mysql")));
+
+        builder.Services.AddDbContext<FileDbContext>(options =>
+            options.UseMySql(builder.Configuration.GetConnectionString("FileDbConnection"), // Убедитесь, что строка подключения указана
+                     ServerVersion.Parse("8.0.30-mysql")));
+
         // Настройте Identity
         builder.Services.AddIdentity<User, IdentityRole<int>>()
             .AddEntityFrameworkStores<AuthDbContext>()
@@ -28,9 +39,9 @@ internal class Program
 
         // Регистрация сервисов AuthModule
         builder.Services.AddScoped<IAuthService, AuthService>();
-        builder.Services.AddScoped<IAuthlibKeyService, AuthlibKeyService>(); // Добавьте IAuthlibKeyService
-                                                                             // builder.Services.AddScoped<ITextureService, TextureService>(); // Добавьте ITextureService, когда он будет реализован
-                                                                             // Регистрация других сервисов, если есть
+        builder.Services.AddScoped<IAuthlibKeyService, AuthlibKeyService>();
+        builder.Services.AddScoped<ITextureService, TextureService>();
+        builder.Services.AddScoped<IFileService, FileService>();
 
         // Добавьте остальные сервисы (Controllers, CORS, JWT и т.д.)
         builder.Services.AddControllers();

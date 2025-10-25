@@ -1,5 +1,6 @@
 ﻿using FoxLauncher.Modules.AuthModule.Models;
 using FoxLauncher.Modules.AuthModule.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Swashbuckle.AspNetCore.Annotations;
@@ -12,6 +13,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers
     /// </summary>
     [ApiController]
     [Route("api/[controller]")] // Базовый маршрут для API аутентификации
+    [Authorize(Policy = "RequireUserRole")]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;

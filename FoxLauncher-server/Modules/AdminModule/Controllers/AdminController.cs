@@ -1,5 +1,6 @@
-﻿using FoxLauncher.Modules.ProfileModule.Data; 
-using FoxLauncher.Modules.ProfileModule.Models; 
+﻿using FoxLauncher.Modules.AdminModule.Services;
+using FoxLauncher.Modules.ProfileModule.Data;
+using FoxLauncher.Modules.ProfileModule.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,16 +13,21 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
     /// Контроллер для административного управления профилями, версиями и файлами.
     /// </summary>
     [ApiController]
-    [Route("api/admin")] // Базовый путь для админ-панели
-    [Authorize(Roles = "Admin")] // Защищаем все эндпоинты контроллера с помощью ролей
+    [Route("api/admin")]
+    [Authorize(Policy = "RequireAdminRole")]
     public class AdminController : ControllerBase
     {
-        private readonly ProfileDbContext _context; // Используем ProfileDbContext
+        private readonly IAdminService _adminService;
         private readonly ILogger<AdminController> _logger;
 
-        public AdminController(ProfileDbContext context, ILogger<AdminController> logger)
+        /// <summary>
+        /// Инициализирует новый экземпляр класса <see cref="AdminController"/>.
+        /// </summary>
+        /// <param name="adminService">Сервис для выполнения административных операций.</param>
+        /// <param name="logger">Логгер для записи событий контроллера.</param>
+        public AdminController(IAdminService adminService, ILogger<AdminController> logger)
         {
-            _context = context;
+            _adminService = adminService;
             _logger = logger;
         }
 
@@ -37,8 +43,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(typeof(IEnumerable<Profile>), 200)]
         public async Task<ActionResult<IEnumerable<Profile>>> GetProfiles()
         {
-            _logger.LogInformation("Admin {AdminId} requested all profiles.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            var profiles = await _context.Profiles.ToListAsync();
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var profiles = await _adminService.GetProfilesAsync(_logger, userId);
             return Ok(profiles);
         }
 
@@ -56,18 +62,9 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(404)]
         public async Task<ActionResult<Profile>> GetProfile(int id)
         {
-            _logger.LogInformation("Admin {AdminId} requested profile with ID {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            var profile = await _context.Profiles
-                .Include(p => p.Versions) // Включаем связанные версии
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (profile == null)
-            {
-                _logger.LogWarning("Admin {AdminId} requested non-existent profile with ID {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                return NotFound();
-            }
-
-            return Ok(profile);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var result = await _adminService.GetProfileAsync(_logger, userId, id);
+            return result;
         }
 
         /// <summary>
@@ -89,13 +86,10 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
                 _logger.LogWarning("Admin {AdminId} attempted to create a profile with invalid data.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
                 return BadRequest(ModelState);
             }
-
-            _logger.LogInformation("Admin {AdminId} is creating a new profile.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            _context.Profiles.Add(profile);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Profile {ProfileId} created successfully by admin {AdminId}.", profile.Id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            return CreatedAtAction(nameof(GetProfile), new { id = profile.Id }, profile);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var result = await _adminService.CreateProfileAsync(_logger, userId, profile);
+            // Предполагаем, что сервис возвращает ActionResult<Profile> с Created или другим статусом
+            return result;
         }
 
         /// <summary>
@@ -125,30 +119,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
                 _logger.LogWarning("Admin {AdminId} attempted to update profile {ProfileId} with invalid data.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
                 return BadRequest(ModelState);
             }
-
-            _logger.LogInformation("Admin {AdminId} is updating profile with ID {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            _context.Entry(profile).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-                _logger.LogInformation("Profile {ProfileId} updated successfully by admin {AdminId}.", profile.Id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                if (!ProfileExists(id))
-                {
-                    _logger.LogWarning("Admin {AdminId} attempted to update non-existent profile with ID {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                    return NotFound();
-                }
-                else
-                {
-                    _logger.LogError(ex, "Concurrency error while updating profile {ProfileId} by admin {AdminId}.", id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                    throw; // Перебрасываем исключение, чтобы вызвать глобальный обработчик ошибок, если таковой имеется
-                }
-            }
-
-            return NoContent();
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return await _adminService.UpdateProfileAsync(_logger, userId, id, profile);
         }
 
         /// <summary>
@@ -165,24 +137,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(404)]
         public async Task<IActionResult> DeleteProfile(int id)
         {
-            _logger.LogInformation("Admin {AdminId} is attempting to delete profile with ID {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            var profile = await _context.Profiles.FindAsync(id);
-            if (profile == null)
-            {
-                _logger.LogWarning("Admin {AdminId} attempted to delete non-existent profile with ID {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                return NotFound();
-            }
-
-            _context.Profiles.Remove(profile);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Profile {ProfileId} deleted successfully by admin {AdminId}.", id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            return NoContent();
-        }
-
-        private bool ProfileExists(int id)
-        {
-            return _context.Profiles.Any(e => e.Id == id);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return await _adminService.DeleteProfileAsync(_logger, userId, id);
         }
 
         /// <summary>
@@ -197,10 +153,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(typeof(IEnumerable<ProfileModule.Models.Version>), 200)]
         public async Task<ActionResult<IEnumerable<ProfileModule.Models.Version>>> GetVersions()
         {
-            _logger.LogInformation("Admin {AdminId} requested all versions.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            var versions = await _context.Versions
-                .Include(v => v.Profile) // Включаем связанный профиль
-                .ToListAsync();
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var versions = await _adminService.GetVersionsAsync(_logger, userId);
             return Ok(versions);
         }
 
@@ -218,19 +172,9 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(404)]
         public async Task<ActionResult<ProfileModule.Models.Version>> GetVersion(int id)
         {
-            _logger.LogInformation("Admin {AdminId} requested version with ID {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            var version = await _context.Versions
-                .Include(v => v.Profile) // Включаем связанный профиль
-                .Include(v => v.Files)   // Включаем связанные файлы
-                .FirstOrDefaultAsync(v => v.Id == id);
-
-            if (version == null)
-            {
-                _logger.LogWarning("Admin {AdminId} requested non-existent version with ID {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                return NotFound();
-            }
-
-            return Ok(version);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var result = await _adminService.GetVersionAsync(_logger, userId, id);
+            return result;
         }
 
         /// <summary>
@@ -252,21 +196,10 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
                 _logger.LogWarning("Admin {AdminId} attempted to create a version with invalid data.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
                 return BadRequest(ModelState);
             }
-
-            // Проверить, существует ли профиль, к которому привязывается версия
-            var profileExists = await _context.Profiles.AnyAsync(p => p.Id == version.ProfileId);
-            if (!profileExists)
-            {
-                _logger.LogWarning("Admin {AdminId} attempted to create a version for a non-existent profile ID {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, version.ProfileId);
-                return BadRequest("Profile not found.");
-            }
-
-            _logger.LogInformation("Admin {AdminId} is creating a new version for profile {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, version.ProfileId);
-            _context.Versions.Add(version);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Version {VersionId} created successfully by admin {AdminId}.", version.Id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            return CreatedAtAction(nameof(GetVersion), new { id = version.Id }, version);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var result = await _adminService.CreateVersionAsync(_logger, userId, version);
+            // Предполагаем, что сервис возвращает ActionResult<Version> с Created или другим статусом
+            return result;
         }
 
         /// <summary>
@@ -296,38 +229,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
                 _logger.LogWarning("Admin {AdminId} attempted to update version {VersionId} with invalid data.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
                 return BadRequest(ModelState);
             }
-
-            // Проверить, существует ли профиль, к которому привязывается версия
-            var profileExists = await _context.Profiles.AnyAsync(p => p.Id == version.ProfileId);
-            if (!profileExists)
-            {
-                _logger.LogWarning("Admin {AdminId} attempted to update version {VersionId} linked to a non-existent profile ID {ProfileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id, version.ProfileId);
-                return BadRequest("Profile not found.");
-            }
-
-            _logger.LogInformation("Admin {AdminId} is updating version with ID {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            _context.Entry(version).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-                _logger.LogInformation("Version {VersionId} updated successfully by admin {AdminId}.", version.Id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                if (!VersionExists(id))
-                {
-                    _logger.LogWarning("Admin {AdminId} attempted to update non-existent version with ID {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                    return NotFound();
-                }
-                else
-                {
-                    _logger.LogError(ex, "Concurrency error while updating version {VersionId} by admin {AdminId}.", id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                    throw;
-                }
-            }
-
-            return NoContent();
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return await _adminService.UpdateVersionAsync(_logger, userId, id, version);
         }
 
         /// <summary>
@@ -344,24 +247,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(404)]
         public async Task<IActionResult> DeleteVersion(int id)
         {
-            _logger.LogInformation("Admin {AdminId} is attempting to delete version with ID {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            var version = await _context.Versions.FindAsync(id);
-            if (version == null)
-            {
-                _logger.LogWarning("Admin {AdminId} attempted to delete non-existent version with ID {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                return NotFound();
-            }
-
-            _context.Versions.Remove(version);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Version {VersionId} deleted successfully by admin {AdminId}.", id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            return NoContent();
-        }
-
-        private bool VersionExists(int id)
-        {
-            return _context.Versions.Any(e => e.Id == id);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return await _adminService.DeleteVersionAsync(_logger, userId, id);
         }
 
         /// <summary>
@@ -376,10 +263,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(typeof(IEnumerable<GameFile>), 200)]
         public async Task<ActionResult<IEnumerable<GameFile>>> GetFiles()
         {
-            _logger.LogInformation("Admin {AdminId} requested all files.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            var files = await _context.GameFiles
-                .Include(f => f.Version) // Включаем связанную версию
-                .ToListAsync();
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var files = await _adminService.GetFilesAsync(_logger, userId);
             return Ok(files);
         }
 
@@ -397,18 +282,9 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(404)]
         public async Task<ActionResult<GameFile>> GetFile(int id)
         {
-            _logger.LogInformation("Admin {AdminId} requested file with ID {FileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            var file = await _context.GameFiles
-                .Include(f => f.Version) // Включаем связанную версию
-                .FirstOrDefaultAsync(f => f.Id == id);
-
-            if (file == null)
-            {
-                _logger.LogWarning("Admin {AdminId} requested non-existent file with ID {FileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                return NotFound();
-            }
-
-            return Ok(file);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var result = await _adminService.GetFileAsync(_logger, userId, id);
+            return result;
         }
 
         /// <summary>
@@ -430,21 +306,10 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
                 _logger.LogWarning("Admin {AdminId} attempted to create a file with invalid data.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
                 return BadRequest(ModelState);
             }
-
-            // Проверить, существует ли версия, к которой привязывается файл
-            var versionExists = await _context.Versions.AnyAsync(v => v.Id == file.VersionId);
-            if (!versionExists)
-            {
-                _logger.LogWarning("Admin {AdminId} attempted to create a file for a non-existent version ID {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, file.VersionId);
-                return BadRequest("Version not found.");
-            }
-
-            _logger.LogInformation("Admin {AdminId} is creating a new file for version {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, file.VersionId);
-            _context.GameFiles.Add(file);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("File {FileId} created successfully by admin {AdminId}.", file.Id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            return CreatedAtAction(nameof(GetFile), new { id = file.Id }, file);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var result = await _adminService.CreateFileAsync(_logger, userId, file);
+            // Предполагаем, что сервис возвращает ActionResult<GameFile> с Created или другим статусом
+            return result;
         }
 
         /// <summary>
@@ -474,38 +339,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
                 _logger.LogWarning("Admin {AdminId} attempted to update file {FileId} with invalid data.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
                 return BadRequest(ModelState);
             }
-
-            // Проверить, существует ли версия, к которой привязывается файл
-            var versionExists = await _context.Versions.AnyAsync(v => v.Id == file.VersionId);
-            if (!versionExists)
-            {
-                _logger.LogWarning("Admin {AdminId} attempted to update file {FileId} linked to a non-existent version ID {VersionId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id, file.VersionId);
-                return BadRequest("Version not found.");
-            }
-
-            _logger.LogInformation("Admin {AdminId} is updating file with ID {FileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            _context.Entry(file).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-                _logger.LogInformation("File {FileId} updated successfully by admin {AdminId}.", file.Id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                if (!FileExists(id))
-                {
-                    _logger.LogWarning("Admin {AdminId} attempted to update non-existent file with ID {FileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                    return NotFound();
-                }
-                else
-                {
-                    _logger.LogError(ex, "Concurrency error while updating file {FileId} by admin {AdminId}.", id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-                    throw;
-                }
-            }
-
-            return NoContent();
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return await _adminService.UpdateFileAsync(_logger, userId, id, file);
         }
 
         /// <summary>
@@ -522,24 +357,8 @@ namespace FoxLauncher.Modules.AdminModule.Controllers
         [ProducesResponseType(404)]
         public async Task<IActionResult> DeleteFile(int id)
         {
-            _logger.LogInformation("Admin {AdminId} is attempting to delete file with ID {FileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-            var file = await _context.GameFiles.FindAsync(id);
-            if (file == null)
-            {
-                _logger.LogWarning("Admin {AdminId} attempted to delete non-existent file with ID {FileId}.", User.FindFirst(ClaimTypes.NameIdentifier)?.Value, id);
-                return NotFound();
-            }
-
-            _context.GameFiles.Remove(file);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("File {FileId} deleted successfully by admin {AdminId}.", id, User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            return NoContent();
-        }
-
-        private bool FileExists(int id)
-        {
-            return _context.GameFiles.Any(e => e.Id == id);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return await _adminService.DeleteFileAsync(_logger, userId, id);
         }
     }
 }

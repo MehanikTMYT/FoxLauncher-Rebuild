@@ -1,30 +1,53 @@
-﻿using System;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 
-class Program
+namespace JWTGenerator
 {
-    static void Main()
+    /// <summary>
+    /// Генератор криптографических ключей HS256.
+    /// Создает два ключа: один для администраторов (приватный), другой для обычных пользователей (публичный).
+    /// </summary>
+    class Program
     {
-        // Генерируем 32 байта (256 бит)
-        byte[] key = new byte[32];
-        using (var rng = RandomNumberGenerator.Create())
+        /// <summary>
+        /// Генерирует два 256-битных (32 байта) ключа HS256 и кодирует их в Base64,
+        /// </summary>
+        static void Main()
         {
-            rng.GetBytes(key);
+            Console.OutputEncoding = Encoding.UTF8; 
+
+            Console.WriteLine("=== Генерация ключей HS256 ===");
+
+            // --- Шаг 1: Генерация КЛЮЧА для ПРИВАТНОГО (Admin) токена ---
+            Console.WriteLine("\n--- Ключ для ПРИВАТНОГО (Admin) токена ---");
+            byte[] adminKeyBytes = new byte[32]; // 256 бит = 32 байта
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(adminKeyBytes);
+            }
+            string adminBase64Key = Convert.ToBase64String(adminKeyBytes);
+            Console.WriteLine($" Base64 (для appsettings.json - Admin Secret):");
+            Console.WriteLine(adminBase64Key);
+            Console.WriteLine($"Длина Base64: {adminBase64Key.Length} символов");
+
+
+            // --- Шаг 2: Генерация КЛЮЧА для ПУБЛИЧНОГО (User) токена ---
+            Console.WriteLine("\n---  Ключ для ПУБЛИЧНОГО (User) токена ---");
+            byte[] userKeyBytes = new byte[32]; // 256 бит = 32 байта
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(userKeyBytes);
+            }
+            string userBase64Key = Convert.ToBase64String(userKeyBytes);
+            Console.WriteLine($"Base64 (для appsettings.json - User Secret):");
+            Console.WriteLine(userBase64Key);
+            Console.WriteLine($"Длина Base64: {userBase64Key.Length} символов");
+
+            // --- Шаг 3: Инструкция для сервера ---
+            // 
+            Console.WriteLine(" Секретные ключи (Base64) для `appsettings.json`:");
+            Console.WriteLine($"   - Admin Secret Key: {adminBase64Key}");
+            Console.WriteLine($"   - User Secret Key:  {userBase64Key}");
         }
-
-        // Кодируем в Base64 для удобного хранения
-        string base64Key = Convert.ToBase64String(key);
-        Console.WriteLine("JwtSettings.SecretKey (Base64):");
-        Console.WriteLine(base64Key);
-        Console.WriteLine();
-        Console.WriteLine("Длина строки: " + base64Key.Length + " символов");
-
-        // Опционально: кодируем в Hex
-        string hexKey = Convert.ToHexString(key);
-        Console.WriteLine("JwtSettings.SecretKey (Hex):");
-        Console.WriteLine(hexKey);
-        Console.WriteLine();
-        Console.WriteLine("Длина строки (Hex): " + hexKey.Length + " символов");
     }
 }

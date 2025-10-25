@@ -1,0 +1,78 @@
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio temporary files
+.vs/
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio files
+*.VC.db
+*.VC.VC.opendb
+*.csproj.user
+*.csproj.filters
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ASP.NET Core
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
+
+# JetBrains Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Coverage results
+coverage/
+*.coverage
+*.coveragexml
+
+# Publish output
+[Pp]ublish/
+[Pp]ublished/
+
+# Ignore all bin and obj directories recursively
+**/bin/
+**/obj/
+
+# Specific to your structure: ignore Debug/net9.0 folders
+**/bin/Debug/net9.0/
+**/obj/Debug/net9.0/

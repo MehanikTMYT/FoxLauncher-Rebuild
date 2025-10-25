@@ -2,6 +2,7 @@
 using FoxLauncher.Modules.AuthModule.Models;
 using FoxLauncher.Modules.AuthModule.Services;
 using FoxLauncher.Modules.AuthModule.Services.Authlib;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,7 @@ namespace FoxLauncher.Modules.AuthModule.Controllers.Authlib
     /// </summary>
     [ApiController]
     [Route("authlib")] // Базовый путь для authlib
+    [Authorize(Policy = "RequireUserRole")]
     public class AuthlibController : ControllerBase
     {
         private readonly AuthDbContext _context;

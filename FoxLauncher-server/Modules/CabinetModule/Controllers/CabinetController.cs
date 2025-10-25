@@ -17,7 +17,7 @@ namespace FoxLauncher.Modules.CabinetModule.Controllers
     /// </summary>
     [ApiController]
     [Route("api/cabinet")]
-    [Authorize]
+    [Authorize(Policy = "RequireUserRole")]
     public class CabinetController : ControllerBase
     {
         private readonly AuthDbContext _context;

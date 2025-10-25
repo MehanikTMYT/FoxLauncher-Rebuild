@@ -8,32 +8,29 @@ using FoxLauncher.Modules.ProfileModule.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models; 
+using Microsoft.OpenApi.Models;
+using Microsoft.IdentityModel.Tokens;
 using System.Reflection;
 using System.Text;
-using Serilog; 
+using Serilog;
 
 internal class Program
 {
     private static void Main(string[] args)
     {
-        // 1. --- Настройка Serilog ---
         Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
-            .WriteTo.File("logs/foxlauncher-.txt", rollingInterval: RollingInterval.Day) // Логи в файл с ротацией
-            .MinimumLevel.Debug() // Уровень логирования
-            .CreateBootstrapLogger(); // Создание начального логгера
+            .WriteTo.File("logs/foxlauncher-.txt", rollingInterval: RollingInterval.Day)
+            .MinimumLevel.Debug()
+            .CreateBootstrapLogger();
 
         var builder = WebApplication.CreateBuilder(args);
 
-        // Сообщаем ASP.NET Core использовать Serilog
         builder.Host.UseSerilog((context, configuration) => configuration
-            .ReadFrom.Configuration(context.Configuration)); // Читаем настройки из appsettings.json (опционально)
+            .ReadFrom.Configuration(context.Configuration));
 
-        // 2. --- Конфигурация ---
         builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
-        // 3. --- Настройка DbContext ---
         builder.Services.AddDbContext<AuthDbContext>(options =>
             options.UseMySql(builder.Configuration.GetConnectionString("AuthDbConnection"),
                              ServerVersion.Parse("8.0.30-mysql")));
@@ -46,36 +43,26 @@ internal class Program
             options.UseMySql(builder.Configuration.GetConnectionString("FileDbConnection"),
                      ServerVersion.Parse("8.0.30-mysql")));
 
-        // 4. --- Настройка Identity с ролями ---
         builder.Services.AddIdentity<User, IdentityRole<int>>()
             .AddEntityFrameworkStores<AuthDbContext>()
-            .AddDefaultTokenProviders(); // Провайдеры токенов (например, для подтверждения email)
-
-        // 5. --- Регистрация сервисов ---
+            .AddDefaultTokenProviders();
 
         builder.Services.AddScoped<IAuthService, AuthService>();
         builder.Services.AddScoped<IAuthlibKeyService, AuthlibKeyService>();
         builder.Services.AddScoped<ITextureService, TextureService>();
         builder.Services.AddScoped<IFileService, FileService>();
-        builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+        // Предполагается, что JwtTokenService реализует IJwtTokenService
+        // builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
         builder.Services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
 
-        // 6. --- Добавление MVC, API Explorer, Swagger ---
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
-
-        // --- Настройка Swagger ---
         builder.Services.AddSwaggerGen(c =>
         {
-            c.EnableAnnotations(); // Включаем аннотации Swashbuckle
-
-            // --- Настройка XML-документации ---
+            c.EnableAnnotations();
             var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
             var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-            // Убедитесь, что XML-документация генерируется (см. FoxLauncher-server.csproj)
             c.IncludeXmlComments(xmlPath);
-
-            // --- Информация об API ---
             c.SwaggerDoc("v1", new OpenApiInfo
             {
                 Version = "v1",
@@ -83,50 +70,63 @@ internal class Program
                 Description = "API для аутентификации, управления профилями, версиями и файлами в FoxLauncher.",
                 Contact = new OpenApiContact
                 {
-                    Name = "FoxLauncher", 
+                    Name = "FoxLauncher",
                 },
-    
             });
         });
 
-        // 7. --- Настройка Authentication и JWT ---
-        var jwtSettings = builder.Configuration.GetSection("Jwt"); // Читаем из секции Jwt в appsettings.json
-        var jwtSecret = jwtSettings["Key"];
-        var jwtIssuer = jwtSettings["Issuer"] ?? "FoxLauncher"; // Значение по умолчанию
-        var jwtAudience = jwtSettings["Audience"] ?? "FoxLauncher"; // Значение по умолчанию
+        // --- Настройка аутентификации с двумя схемами JWT ---
+        var jwtSettings = builder.Configuration.GetSection("Jwt");
+        var adminSecretKeyBase64 = jwtSettings["AdminSecretKey"];
+        var userSecretKeyBase64 = jwtSettings["UserSecretKey"];
+        var jwtIssuer = jwtSettings["Issuer"];
+        var jwtAudience = jwtSettings["Audience"];
 
-        if (string.IsNullOrEmpty(jwtSecret))
+        if (string.IsNullOrEmpty(adminSecretKeyBase64) || string.IsNullOrEmpty(userSecretKeyBase64))
         {
-            throw new InvalidOperationException("Jwt:Key is not configured in appsettings.json");
+            throw new InvalidOperationException("Jwt:AdminSecretKey or Jwt:UserSecretKey is not configured in appsettings.json");
         }
 
-        var signingKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
+        byte[] adminKeyBytes = Convert.FromBase64String(adminSecretKeyBase64);
+        byte[] userKeyBytes = Convert.FromBase64String(userSecretKeyBase64);
 
         builder.Services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            // options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme; // Альтернативный способ
         })
-        .AddJwtBearer("JwtBearer", jwtOptions =>
+        .AddJwtBearer("AdminScheme", options =>
         {
-            jwtOptions.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+            options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = signingKey, // Используем созданный ключ
-                ValidateIssuer = true, // Установите в true и укажите Issuer
+                IssuerSigningKey = new SymmetricSecurityKey(adminKeyBytes),
+                ValidateIssuer = !string.IsNullOrEmpty(jwtIssuer),
                 ValidIssuer = jwtIssuer,
-                ValidateAudience = true, // Установите в true и укажите Audience
+                ValidateAudience = !string.IsNullOrEmpty(jwtAudience),
                 ValidAudience = jwtAudience,
                 ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero // Убираем сдвиг времени
+                ClockSkew = TimeSpan.Zero
+            };
+        })
+        .AddJwtBearer("UserScheme", options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(userKeyBytes),
+                ValidateIssuer = !string.IsNullOrEmpty(jwtIssuer),
+                ValidIssuer = jwtIssuer,
+                ValidateAudience = !string.IsNullOrEmpty(jwtAudience),
+                ValidAudience = jwtAudience,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
             };
         });
+        // --- Конец настройки аутентификации ---
 
-        // 8. --- Построение приложения ---
         var app = builder.Build();
 
-        // 9. --- Настройка HTTP pipeline ---
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
@@ -134,12 +134,11 @@ internal class Program
         }
 
         app.UseHttpsRedirection();
-        app.UseAuthentication(); // Важно для JWT
+        app.UseAuthentication();
         app.UseAuthorization();
 
         app.MapControllers();
 
-        // 10. --- Запуск приложения ---
         app.Run();
     }
 }
